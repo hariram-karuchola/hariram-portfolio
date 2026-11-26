@@ -1,27 +1,27 @@
 export default async function handler(req, res) {
   const rawUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
   const supabaseUrl = rawUrl.trim().replace(/\/+$/, "");
-  const supabaseAnonKey = (
+  const supabaseKey = (
     process.env.SUPABASE_ANON_KEY ||
     process.env.VITE_SUPABASE_ANON_KEY ||
     ""
   ).trim();
   const rowId = 1;
 
-  if (!supabaseUrl || !supabaseAnonKey) {
+  if (!supabaseUrl || !supabaseKey) {
     return res.status(500).json({ error: "SUPABASE_URL or SUPABASE_ANON_KEY missing on Vercel" });
+  }
+
+  const headers = { apikey: supabaseKey };
+  if (!supabaseKey.startsWith("sb_publishable_")) {
+    headers.Authorization = `Bearer ${supabaseKey}`;
   }
 
   const endpoint = `${supabaseUrl}/rest/v1/portfolio_config`;
 
   try {
     if (req.method === "GET") {
-      const response = await fetch(`${endpoint}?id=eq.${rowId}&select=data`, {
-        headers: {
-          apikey: supabaseAnonKey,
-          Authorization: `Bearer ${supabaseAnonKey}`,
-        },
-      });
+      const response = await fetch(`${endpoint}?id=eq.${rowId}&select=data`, { headers });
       const rows = await response.json();
       if (!response.ok) {
         return res.status(response.status).json({ error: rows });
@@ -35,8 +35,7 @@ export default async function handler(req, res) {
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
-          apikey: supabaseAnonKey,
-          Authorization: `Bearer ${supabaseAnonKey}`,
+          ...headers,
           "Content-Type": "application/json",
           Prefer: "resolution=merge-duplicates",
         },
@@ -57,9 +56,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   } catch (err) {
     const detail = err?.cause?.code || err?.cause?.message || err.message || "Proxy fetch failed";
-    return res.status(500).json({
-      error: `Proxy error: ${detail}`,
-      urlChecked: supabaseUrl,
-    });
+    return res.status(500).json({ error: `Proxy error: ${detail}` });
   }
 }
